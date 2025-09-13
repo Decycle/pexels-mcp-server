@@ -1,7 +1,7 @@
 {
-  "name": "pexels-mcp-server",
+  "name": "engine-pexels",
   "version": "1.0.0",
-  "description": "MCP server for handling model context protocol with Pexels API integration",
+  "description": "Enhanced MCP server for Pexels API integration with automatic image/video downloading capabilities",
   "type": "module",
   "main": "dist/main.js",
   "bin": "dist/main.js",
@@ -9,7 +9,13 @@
     "build": "tsc",
     "dev": "tsx watch src/main.ts"
   },
-  "keywords": ["mcp", "ai", "model-context-protocol", "pexels", "api"],
+  "keywords": [
+    "mcp",
+    "ai",
+    "model-context-protocol",
+    "pexels",
+    "api"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {

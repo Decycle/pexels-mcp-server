@@ -18,6 +18,9 @@ const server = new McpServer({
 // Initialize Pexels service - API key should be provided via environment variable PEXELS_API_KEY
 const pexelsService = new PexelsService();
 
+// Configuration state for workspace path
+let workspacePath: string = "";
+
 // --- Photo API Tools ---
 
 // Tool for searching photos
@@ -91,48 +94,82 @@ server.tool(
     size: z.enum(['original', 'large2x', 'large', 'medium', 'small', 'portrait', 'landscape', 'tiny'])
            .optional().default('original')
            .describe("Desired photo size/version to download"),
+    relative_save_path: z.string().describe("The relative path from workspace where the image should be saved"),
   },
-  async ({ id, size }, _extra) => {
+  async ({ id, size, relative_save_path }: { id: number; size?: string; relative_save_path: string }) => {
     try {
-      const response = await pexelsService.getPhoto(id);
-      const photo = response.data; // Access the actual data
-      const rateLimit = response.rateLimit; // Get rate limit info
+      // Check if workspace path is configured
+      if (!workspacePath) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Workspace path not configured. Please use setWorkspacePath tool first."
+            }
+          ]
+        };
+      }
 
-      if (!photo) { // Check if data itself is null/undefined (though service should throw 404)
+      const response = await pexelsService.getPhoto(id);
+      const photo = response.data;
+      const rateLimit = response.rateLimit;
+
+      if (!photo) {
         return {
           content: [
             { type: "text", text: `Photo with ID ${id} not found.` }
           ]
         };
       }
+
       // Select the URL based on the requested size
       const availableSizes = photo.src;
-      let imageUrl = availableSizes[size];
-      let actualSize = size;
+      let imageUrl = availableSizes[size as keyof typeof availableSizes] || availableSizes.original;
+      let actualSize = size || 'original';
 
-      // Fallback logic if requested size isn't directly available (though Pexels usually provides all)
+      // Fallback logic if requested size isn't directly available
       if (!imageUrl) {
         console.warn(`Requested size '${size}' not found for photo ${id}, falling back to 'original'.`);
         imageUrl = availableSizes.original;
         actualSize = 'original';
       }
-       if (!imageUrl) { // Final fallback if even original is missing (unlikely)
-         return { content: [{ type: "text", text: `Could not find any download URL for photo ID ${id}.` }] };
-       }
+      if (!imageUrl) {
+        return { content: [{ type: "text", text: `Could not find any download URL for photo ID ${id}.` }] };
+      }
 
+      // Construct the full save path
+      const fullSavePath = path.join(workspacePath, relative_save_path);
+      
+      // Ensure the directory exists
+      await fs.mkdir(path.dirname(fullSavePath), { recursive: true });
 
+      // Determine file extension and final filename
       const ext = path.extname(new URL(imageUrl).pathname) || ".jpg";
-      const fileName = `pexels_${photo.id}_${actualSize}${ext}`; // Include size in filename
+      const fileName = path.basename(relative_save_path, path.extname(relative_save_path)) + `_${actualSize}${ext}`;
+      const finalPath = path.join(path.dirname(fullSavePath), fileName);
 
-      // Return the direct download link instead of fetching data
+      // Download the image
+      const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to download image: ${imageResponse.status} ${imageResponse.statusText}`);
+      }
+
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuffer);
+      await fs.writeFile(finalPath, buffer);
+
       const content: any[] = [
         {
           type: "text",
-          text: `Download Link (${actualSize}): ${imageUrl}`
+          text: `Photo downloaded successfully to: ${finalPath}`
         },
         {
           type: "text",
-          text: `Suggested Filename: ${fileName}\nAttribution: Photo by ${photo.photographer} (${photo.photographer_url}) on Pexels. License: https://www.pexels.com/license/\n\nRecommendation: Use an available local tool (like curl or PowerShell's Invoke-WebRequest) to download the photo using the link provided.`
+          text: `Photo ID: ${photo.id}, Size: ${actualSize}, File size: ${buffer.length} bytes`
+        },
+        {
+          type: "text",
+          text: `Attribution: Photo by ${photo.photographer} (${photo.photographer_url}) on Pexels. License: https://www.pexels.com/license/`
         }
       ];
 
@@ -151,7 +188,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Error preparing photo data: ${(error as Error).message}`
+            text: `Error downloading photo: ${(error as Error).message}`
           }
         ]
       };
@@ -165,15 +202,28 @@ server.tool(
   "downloadVideo",
   {
     id: z.number().positive().describe("The ID of the video to download"),
-    quality: z.enum(["hd", "sd"]).optional().default("hd").describe("Preferred video quality (hd or sd)")
+    quality: z.enum(["hd", "sd"]).optional().default("hd").describe("Preferred video quality (hd or sd)"),
+    relative_save_path: z.string().describe("The relative path from workspace where the video should be saved"),
   },
-  async ({ id, quality }, _extra) => {
+  async ({ id, quality, relative_save_path }: { id: number; quality?: string; relative_save_path: string }) => {
     try {
-      const response = await pexelsService.getVideo(id);
-      const videoData = response.data; // Access the actual data
-      const rateLimit = response.rateLimit; // Get rate limit info
+      // Check if workspace path is configured
+      if (!workspacePath) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Workspace path not configured. Please use setWorkspacePath tool first."
+            }
+          ]
+        };
+      }
 
-      if (!videoData) { // Check if data itself is null/undefined
+      const response = await pexelsService.getVideo(id);
+      const videoData = response.data;
+      const rateLimit = response.rateLimit;
+
+      if (!videoData) {
         return {
           content: [
             { type: "text", text: `Video with ID ${id} not found.` }
@@ -182,8 +232,7 @@ server.tool(
       }
 
       // Find the video file URL for the desired quality
-      // Add type annotation here
-      const videoFile = videoData.video_files.find((vf: { quality: string; }) => vf.quality === quality) || videoData.video_files[0]; // Fallback to first available
+      const videoFile = videoData.video_files.find((vf: { quality: string; }) => vf.quality === quality) || videoData.video_files[0];
       if (!videoFile) {
         return {
           content: [
@@ -192,24 +241,44 @@ server.tool(
         };
       }
 
-      const videoUrl = videoFile.link;
-      const ext = path.extname(new URL(videoUrl).pathname) || ".mp4"; // Guess extension
-      const fileName = `pexels_video_${videoData.id}_${videoFile.quality}${ext}`;
+      // Construct the full save path
+      const fullSavePath = path.join(workspacePath, relative_save_path);
+      
+      // Ensure the directory exists
+      await fs.mkdir(path.dirname(fullSavePath), { recursive: true });
 
-      // Return the direct download link instead of fetching data
+      // Determine file extension and final filename
+      const ext = path.extname(new URL(videoFile.link).pathname) || ".mp4";
+      const fileName = path.basename(relative_save_path, path.extname(relative_save_path)) + `_${videoFile.quality}${ext}`;
+      const finalPath = path.join(path.dirname(fullSavePath), fileName);
+
+      // Download the video
+      const videoResponse = await fetch(videoFile.link);
+      if (!videoResponse.ok) {
+        throw new Error(`Failed to download video: ${videoResponse.status} ${videoResponse.statusText}`);
+      }
+
+      const arrayBuffer = await videoResponse.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuffer);
+      await fs.writeFile(finalPath, buffer);
+
       const content: any[] = [
         {
           type: "text",
-          text: `Download Link (${videoFile.quality}): ${videoUrl}`
+          text: `Video downloaded successfully to: ${finalPath}`
         },
         {
           type: "text",
-          text: `Suggested Filename: ${fileName}\nAttribution: Video by ${videoData.user.name} (${videoData.user.url}) on Pexels. License: https://www.pexels.com/license/\n\nRecommendation: Use an available local tool (like curl or PowerShell's Invoke-WebRequest) to download the video using the link provided.`
+          text: `Video ID: ${videoData.id}, Quality: ${videoFile.quality}, File size: ${buffer.length} bytes`
+        },
+        {
+          type: "text",
+          text: `Attribution: Video by ${videoData.user.name} (${videoData.user.url}) on Pexels. License: https://www.pexels.com/license/`
         }
       ];
 
-       // Add rate limit info if available
-       if (rateLimit) {
+      // Add rate limit info if available
+      if (rateLimit) {
         const resetDate = rateLimit.reset ? new Date(rateLimit.reset * 1000).toISOString() : 'N/A';
         content.push({
           type: "text",
@@ -223,7 +292,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Error preparing video data: ${(error as Error).message}`
+            text: `Error downloading video: ${(error as Error).message}`
           }
         ]
       };
@@ -796,6 +865,39 @@ server.tool(
           { 
             type: "text", 
             text: `Error setting API key: ${(error as Error).message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Tool to configure workspace path for downloads
+server.tool(
+  "setWorkspacePath",
+  {
+    workspacePath: z.string().describe("The root workspace path where images/videos will be downloaded")
+  },
+  async ({ workspacePath: newWorkspacePath }: { workspacePath: string }) => {
+    try {
+      // Validate that the path exists
+      await fs.access(newWorkspacePath);
+      workspacePath = newWorkspacePath;
+      
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Workspace path set to: ${workspacePath}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error setting workspace path: ${(error as Error).message}. Please ensure the directory exists.`
           }
         ]
       };
