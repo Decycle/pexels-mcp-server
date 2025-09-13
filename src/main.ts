@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import {
   McpServer,
   ResourceTemplate,
@@ -18,8 +20,25 @@ const server = new McpServer({
 // Initialize Pexels service - API key should be provided via environment variable PEXELS_API_KEY
 const pexelsService = new PexelsService();
 
-// Configuration state for workspace path
-let workspacePath: string = "";
+// Configuration state for workspace path - must be set via environment variable
+let workspacePath: string = process.env.WORKSPACE_PATH || "";
+
+// Validate workspace path at startup
+async function validateWorkspacePath() {
+  if (workspacePath) {
+    try {
+      await fs.access(workspacePath);
+      // Workspace is valid, ready for downloads
+    } catch (error) {
+      // Reset to empty if invalid - downloads will show proper error message
+      workspacePath = "";
+    }
+  }
+  // No console.log here to avoid interfering with MCP protocol
+}
+
+// Call validation before starting server
+await validateWorkspacePath();
 
 // --- Photo API Tools ---
 
@@ -104,7 +123,7 @@ server.tool(
           content: [
             {
               type: "text",
-              text: "Workspace path not configured. Please use setWorkspacePath tool first."
+              text: "Workspace path not configured. Please set the WORKSPACE_PATH environment variable and restart the server."
             }
           ]
         };
@@ -213,7 +232,7 @@ server.tool(
           content: [
             {
               type: "text",
-              text: "Workspace path not configured. Please use setWorkspacePath tool first."
+              text: "Workspace path not configured. Please set the WORKSPACE_PATH environment variable and restart the server."
             }
           ]
         };
@@ -872,38 +891,6 @@ server.tool(
   }
 );
 
-// Tool to configure workspace path for downloads
-server.tool(
-  "setWorkspacePath",
-  {
-    workspacePath: z.string().describe("The root workspace path where images/videos will be downloaded")
-  },
-  async ({ workspacePath: newWorkspacePath }: { workspacePath: string }) => {
-    try {
-      // Validate that the path exists
-      await fs.access(newWorkspacePath);
-      workspacePath = newWorkspacePath;
-      
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Workspace path set to: ${workspacePath}`
-          }
-        ]
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error setting workspace path: ${(error as Error).message}. Please ensure the directory exists.`
-          }
-        ]
-      };
-    }
-  }
-);
 
 // Start receiving messages on stdin and sending messages on stdout
 const transport = new StdioServerTransport();

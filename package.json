@@ -1,6 +1,6 @@
 {
   "name": "engine-pexels",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Enhanced MCP server for Pexels API integration with automatic image/video downloading capabilities",
   "type": "module",
   "main": "dist/main.js",

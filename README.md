@@ -39,31 +39,68 @@ This project is forked and enhanced from the original [pexels-mcp-server](https:
    PEXELS_API_KEY=your_api_key pnpm dev
    ```
 
+## Configuration
+
+The server requires two environment variables:
+
+- `PEXELS_API_KEY`: Your Pexels API key (required)
+- `WORKSPACE_PATH`: Root directory where files will be downloaded (required for download functionality)
+
+### Claude MCP Configuration Example
+
+Add this to your MCP settings file:
+
+```json
+{
+  "mcpServers": {
+    "engine-pexels": {
+      "command": "npx",
+      "args": ["engine-pexels"],
+      "env": {
+        "PEXELS_API_KEY": "your_pexels_api_key",
+        "WORKSPACE_PATH": "/path/to/your/workspace"
+      }
+    }
+  }
+}
+```
+
+Alternative local development configuration:
+```json
+{
+  "mcpServers": {
+    "engine-pexels": {
+      "command": "node",
+      "args": ["/path/to/engine-pexels/dist/main.js"],
+      "env": {
+        "PEXELS_API_KEY": "your_pexels_api_key",
+        "WORKSPACE_PATH": "/path/to/your/workspace"
+      }
+    }
+  }
+}
+```
+
 ## Usage Example
 
-1. **Set up the workspace**:
+1. **Search for photos**:
    ```javascript
-   // Configure where files will be downloaded
-   setWorkspacePath("/path/to/your/project")
-   ```
-
-2. **Set your API key**:
-   ```javascript
-   setApiKey("your_pexels_api_key")
-   ```
-
-3. **Search and download**:
-   ```javascript
-   // Search for photos
    searchPhotos("mountain landscape")
-   
-   // Download a specific photo to your workspace
+   ```
+
+2. **Download a specific photo**:
+   ```javascript
    downloadPhoto({
      id: 12345,
      size: "large",
      relative_save_path: "images/landscapes/mountain.jpg"
    })
-   // File will be saved to: /path/to/your/project/images/landscapes/mountain_large.jpg
+   // File will be saved to: /path/to/your/workspace/images/landscapes/mountain_large.jpg
+   ```
+
+3. **Set API key at runtime** (if needed):
+   ```javascript
+   setApiKey("your_pexels_api_key")
    ```
 
 ## Key Enhancements from Original
@@ -92,7 +129,6 @@ The server provides the following tools:
 ### Configuration Tools
 
 - `setApiKey`: Set your Pexels API key for authentication.
-- `setWorkspacePath`: Configure the root workspace directory where images and videos will be downloaded. This directory must exist before setting it.
 
 ### Photo Tools
 

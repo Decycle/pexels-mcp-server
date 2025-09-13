@@ -4,13 +4,20 @@ startCommand:
     type: object
     required:
       - pexelsApiKey
+      - workspacePath
     properties:
       pexelsApiKey:
         type: string
         description: Pexels API key for authenticating requests
+      workspacePath:
+        type: string
+        description: Root workspace directory for downloading images and videos (must exist)
   commandFunction: |
     (config) => ({
       command: "node",
       args: ["dist/main.js"],
-      env: { PEXELS_API_KEY: config.pexelsApiKey }
+      env: {
+        PEXELS_API_KEY: config.pexelsApiKey,
+        WORKSPACE_PATH: config.workspacePath
+      }
     })
